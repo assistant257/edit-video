@@ -1,0 +1,49 @@
+name: Render captioned video review
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: Google Drive video link accessible to this runner
+        required: true
+        type: string
+      allow_repository_readers:
+        description: I authorize repository readers to download the output artifact
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  render:
+    if: inputs.allow_repository_readers
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-noto-core
+          python -m pip install faster-whisper==1.2.1 gdown==5.2.0
+      - name: Fetch source without committing it
+        env:
+          SOURCE_URL: ${{ inputs.source_url }}
+        run: |
+          echo "::add-mask::$SOURCE_URL"
+          mkdir -p work/source output
+          python - <<'PY'
+          import gdown,os
+          gdown.download(url=os.environ['SOURCE_URL'],output='work/source/input.mov',quiet=True,fuzzy=True)
+          PY
+      - name: Render natural-speed captioned review
+        run: python scripts/render_video.py --source work/source/input.mov --output output
+      - name: Save MP4 and editable subtitles
+        uses: actions/upload-artifact@v4
+        with:
+          name: captioned-video-review
+          path: output/
+          if-no-files-found: error
+          retention-days: 3
