@@ -47,7 +47,7 @@ def main():
     for s in segs:
         segments.append({'start':s.start,'end':s.end,'text':s.text,'avg_logprob':s.avg_logprob})
         for w in s.words or []:
-            if w.end>w.start:words.append({'word':w.word,'start':w.start,'end':w.end,'probability':w.probability})
+            if w.end>w.start:words.append({'word':re.sub(r'(?i)\bKBI\b','KPI',w.word),'start':w.start,'end':w.end,'probability':w.probability})
     if not words:raise ValueError('No speech recognized; do not emit fabricated captions')
     print(f'Recognized {len(words)} words in {len(segments)} segments',flush=True)
     cues=make_cues(words)
@@ -58,7 +58,7 @@ def main():
     w,h=int(v['width']),int(v['height'])
     if abs(rotation)%180==90:w,h=h,w
     factor=min(1,1920/max(w,h));w=int(w*factor)//2*2;h=int(h*factor)//2*2
-    fs=round(w*.052);margin=round(h*.26);side=round(w*.14)
+    fs=round(w*.065);margin=round(h*.26);side=round(w*.14)
     header=f'''[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
