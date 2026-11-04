@@ -1,0 +1,38 @@
+name: Finish approved MP4 audio level
+on:
+  push:
+    branches: [codex/video-render-runner]
+    paths: ['.github/workflows/finish-review.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download the already rendered MP4
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41860008107
+          name: captioned-video-review
+          path: work/
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Lower audio gain without re-encoding video
+        run: |
+          mkdir -p final
+          ffmpeg -nostdin -v warning -i work/review.mp4 -map 0:v:0 -map 0:a:0 -c:v copy -af volume=-9dB -c:a aac -b:a 192k -ar 48000 -movflags +faststart final/KPI-ban-dung-thu.mp4
+          ffmpeg -v error -i final/KPI-ban-dung-thu.mp4 -f null -
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,height -of json final/KPI-ban-dung-thu.mp4
+          ffmpeg -hide_banner -i final/KPI-ban-dung-thu.mp4 -vn -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null -
+      - name: Save final MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: KPI-MP4-final
+          path: final/KPI-ban-dung-thu.mp4
+          retention-days: 3
+          if-no-files-found: error
