@@ -43,10 +43,10 @@ jobs:
           PY
       - name: Render natural-speed captioned review
         run: python scripts/render_video.py --source work/source/input.mov --output output
-      - name: Save MP4 and editable subtitles
+      - name: Save approved MP4 only
         uses: actions/upload-artifact@v4
         with:
           name: captioned-video-review
-          path: output/
+          path: output/review.mp4
           if-no-files-found: error
           retention-days: 3

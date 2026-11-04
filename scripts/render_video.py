@@ -34,15 +34,22 @@ def main():
     duration=float(meta['format']['duration'])
     if not 0<duration<=1800:raise ValueError('Review runner supports up to 30 minutes')
     run(['ffmpeg','-nostdin','-y','-v','error','-i',a.source,'-map','0:a:0','-ac','1','-ar','16000',a.output/'speech.wav'])
+    import wave
+    import numpy as np
+    with wave.open(str(a.output/'speech.wav'),'rb') as wav:
+        assert wav.getnchannels()==1 and wav.getsampwidth()==2 and wav.getframerate()==16000
+        speech=np.frombuffer(wav.readframes(wav.getnframes()),dtype=np.int16).astype(np.float32)/32768.0
+    print(f'Source duration: {duration:.3f}s; source canvas: {v["width"]}x{v["height"]}',flush=True)
     from faster_whisper import WhisperModel
     model=WhisperModel(a.model,device='cpu',compute_type='int8',cpu_threads=4)
-    segs,info=model.transcribe(str(a.output/'speech.wav'),language='vi',word_timestamps=True,vad_filter=True,beam_size=5,condition_on_previous_text=False)
+    segs,info=model.transcribe(speech,language='vi',word_timestamps=True,vad_filter=True,beam_size=5,condition_on_previous_text=False)
     words=[];segments=[]
     for s in segs:
         segments.append({'start':s.start,'end':s.end,'text':s.text,'avg_logprob':s.avg_logprob})
         for w in s.words or []:
             if w.end>w.start:words.append({'word':w.word,'start':w.start,'end':w.end,'probability':w.probability})
     if not words:raise ValueError('No speech recognized; do not emit fabricated captions')
+    print(f'Recognized {len(words)} words in {len(segments)} segments',flush=True)
     cues=make_cues(words)
     (a.output/'transcript.json').write_text(json.dumps({'language':info.language,'segments':segments,'words':words},ensure_ascii=False,indent=2))
     (a.output/'captions.srt').write_text('\n\n'.join(f'{i}\n{stamp(c["start"],True)} --> {stamp(c["end"],True)}\n{c["text"]}' for i,c in enumerate(cues,1))+'\n')
@@ -69,10 +76,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     dest=a.output/'review.mp4'
     subprocess.run(['ffmpeg','-nostdin','-y','-v','warning','-i',str(a.source.resolve()),'-map','0:v:0','-map','0:a:0','-vf',f'scale={w}:{h},setsar=1,ass=captions.ass','-c:v','libx264','-preset','fast','-crf','21','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-ar','48000','-movflags','+faststart',str(dest.resolve())],cwd=a.output,check=True)
     run(['ffmpeg','-v','error','-i',dest,'-f','null','-'])
+    run(['ffmpeg','-y','-v','error','-i',dest,'-vf',f'fps=1/{max(1,duration/12)},scale=240:-1,tile=4x3','-frames:v','1',a.output/'contact-sheet.jpg'])
     final=json.loads(run(['ffprobe','-v','error','-show_streams','-show_format','-of','json',dest]).stdout)
     if abs(float(final['format']['duration'])-duration)>.5:raise ValueError('Duration mismatch')
     flags=[{'start':c['start'],'end':c['end'],'text':c['text']} for c in cues if len(c['text'])/max(.01,c['end']-c['start'])>22]
     (a.output/'review-notes.json').write_text(json.dumps({'source_duration':duration,'output_duration':final['format']['duration'],'speed':1,'content_cuts':False,'caption_review':'automatic ASR, human spelling and timing review pending','listening_review':'not_performed','frame_review':'pending','fast_cues':flags,'low_confidence_words':[w for w in words if w['probability']<.65]},ensure_ascii=False,indent=2))
+    (a.output/'source-metadata.json').write_text(json.dumps(meta,indent=2))
     (a.output/'speech.wav').unlink()
     print('MP4 and subtitle files rendered; human audiovisual review still required.')
 if __name__=='__main__':main()
