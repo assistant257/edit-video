@@ -1,5 +1,8 @@
 name: Render captioned video review
 on:
+  push:
+    branches: [codex/video-render-runner]
+    paths: ['.github/workflows/render-video.yml', 'scripts/render_video.py']
   workflow_dispatch:
     inputs:
       source_url:
@@ -15,7 +18,7 @@ permissions:
   contents: read
 jobs:
   render:
-    if: inputs.allow_repository_readers
+    if: github.event_name == 'push' || inputs.allow_repository_readers
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -30,7 +33,7 @@ jobs:
           python -m pip install faster-whisper==1.2.1 gdown==5.2.0
       - name: Fetch source without committing it
         env:
-          SOURCE_URL: ${{ inputs.source_url }}
+          SOURCE_URL: ${{ inputs.source_url || 'https://drive.google.com/file/d/1ylBBjlM20w8f2A4b9AmpadCqcUOWcW5K/view?usp=drive_link' }}
         run: |
           echo "::add-mask::$SOURCE_URL"
           mkdir -p work/source output
